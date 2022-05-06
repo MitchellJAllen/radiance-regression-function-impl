@@ -1,5 +1,6 @@
 import math
 import numpy
+import os
 import pickle
 
 import torch
@@ -104,32 +105,34 @@ def filterData(data):
 	print("sphere:", sphereCount, sphereData.shape) # 41772 / 200K
 	print("unclassified:", unclassifiedCount) # 0 / 200K
 
-fileName = "data/data_20220505152211.pkl"
-data = None
+def loadData(filePath):
+	data = None
 
-# DO NOT EVER USE "wb" WHEN READING A DATA FILE, YOU WILL REGRET IT!!!
+	with open(filePath, "rb") as dataFile:
+		data = pickle.load(dataFile)
 
-with open(fileName, "rb") as dataFile:
-    data = pickle.load(dataFile)
+	return data
 
-print(data.shape)
+dataPath = "data/"
+dataFileNames = os.listdir(dataPath)
 
-fileName2 = "data/data_20220505152807.pkl"
-data2 = None
+data = numpy.empty((0, 12))
 
-with open(fileName, "rb") as dataFile:
-    data2 = pickle.load(dataFile)
+for dataFileName in dataFileNames:
+	if dataFileName == "README.md":
+		continue
 
-print(data2.shape)
+	dataFilePath = dataPath + dataFileName
+	loadedData = loadData(dataFilePath)
 
-data = numpy.append(data, data2, axis = 0)
+	data = numpy.append(data, loadedData, axis = 0)
 
 print(data.shape)
 
 filterData(data)
 
-trainCount = math.floor(data.shape[0] * 0.95)
-testCount = data.shape[0] - trainCount
+testCount = 1000
+trainCount = data.shape[0] - testCount
 
 batchSize = 250
 batchCount = math.ceil(trainCount / batchSize)
@@ -178,4 +181,4 @@ print(p.size())
 print(criterion(y_test, p))
 
 with open("models/test.pkl", "wb") as dataFile:
-    pickle.dump(model, dataFile)
+	pickle.dump(model, dataFile)
