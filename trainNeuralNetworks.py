@@ -13,6 +13,14 @@ import blitz.utils
 
 epsilon = 1e-7
 
+def loadData(filePath):
+	data = None
+
+	with open(filePath, "rb") as dataFile:
+		data = pickle.load(dataFile)
+
+	return data
+
 def isLeftWallPosition(rowData):
 	return (
 		abs(rowData[0] - -2.0) < epsilon and
@@ -58,60 +66,95 @@ def isSpherePosition(rowData):
 def filterData(data):
 	rowCount = data.shape[0]
 
-	leftWallCount = 0
-	rightWallCount = 0
-	centerWallCount = 0
-	floorCount = 0
-	ceilingCount = 0
-	sphereCount = 0
-	unclassifiedCount = 0
-
-	leftWallData = numpy.empty((0, 12))
-	rightWallData = numpy.empty((0, 12))
-	centerWallData = numpy.empty((0, 12))
-	floorData = numpy.empty((0, 12))
-	ceilingData = numpy.empty((0, 12))
-	sphereData = numpy.empty((0, 12))
+	leftWallIndices = []
+	rightWallIndices = []
+	centerWallIndices = []
+	floorIndices = []
+	ceilingIndices = []
+	sphereIndices = []
+	unclassifiedIndices = []
 
 	for rowIndex in range(rowCount):
 		rowData = data[rowIndex : rowIndex + 1, :]
 
 		if isLeftWallPosition(rowData[0, :]):
-			leftWallCount += 1
-			leftWallData = numpy.append(leftWallData, rowData, axis = 0)
+			leftWallIndices.append(rowIndex)
 		elif isRightWallPosition(rowData[0, :]):
-			rightWallCount += 1
-			rightWallData = numpy.append(rightWallData, rowData, axis = 0)
+			rightWallIndices.append(rowIndex)
 		elif isCenterWallPosition(rowData[0, :]):
-			centerWallCount += 1
-			centerWallData = numpy.append(centerWallData, rowData, axis = 0)
+			centerWallIndices.append(rowIndex)
 		elif isFloorPosition(rowData[0, :]):
-			floorCount += 1
-			floorData = numpy.append(floorData, rowData, axis = 0)
+			floorIndices.append(rowIndex)
 		elif isCeilingPosition(rowData[0, :]):
-			ceilingCount += 1
-			ceilingData = numpy.append(ceilingData, rowData, axis = 0)
+			ceilingIndices.append(rowIndex)
 		elif isSpherePosition(rowData[0, :]):
-			sphereCount += 1
-			sphereData = numpy.append(sphereData, rowData, axis = 0)
+			sphereIndices.append(rowIndex)
 		else:
-			unclassifiedCount += 1
+			unclassifiedIndices.append(rowIndex)
 
-	print("left:", leftWallCount, leftWallData.shape) # 26114 / 200K
-	print("right:", rightWallCount, rightWallData.shape) # 26622 / 200K
-	print("center:", centerWallCount, centerWallData.shape) # 52850 / 200K
-	print("floor:", floorCount, floorData.shape) # 26342 / 200K
-	print("ceiling:", ceilingCount, ceilingData.shape) # 26300 / 200K
-	print("sphere:", sphereCount, sphereData.shape) # 41772 / 200K
-	print("unclassified:", unclassifiedCount) # 0 / 200K
+	leftWallData = data[leftWallIndices, :]
+	rightWallData = data[rightWallIndices, :]
+	centerWallData = data[centerWallIndices, :]
+	floorData = data[floorIndices, :]
+	ceilingData = data[ceilingIndices, :]
+	sphereData = data[sphereIndices, :]
 
-def loadData(filePath):
-	data = None
+	print("classifications:")
+	print("left wall:", leftWallData.shape) # 26114 / 200K
+	print("right wall:", rightWallData.shape) # 26622 / 200K
+	print("center wall:", centerWallData.shape) # 52850 / 200K
+	print("floor:", floorData.shape) # 26342 / 200K
+	print("ceiling:", ceilingData.shape) # 26300 / 200K
+	print("sphere:", sphereData.shape) # 41772 / 200K
+	print("unclassified:", len(unclassifiedIndices)) # 0 / 200K
 
-	with open(filePath, "rb") as dataFile:
-		data = pickle.load(dataFile)
+	return [
+		leftWallData, rightWallData, centerWallData,
+		floorData, ceilingData, sphereData
+	]
 
-	return data
+def trainAndSaveNetwork(
+	data, testCount, batchSize, hiddenNodes, epochCount, filePath
+):
+	trainCount = data.shape[0] - testCount
+	batchCount = math.ceil(trainCount / batchSize)
+
+	featureCount = 9
+
+	x_train = torch.tensor(data[:trainCount, :featureCount]).float()
+	y_train = torch.tensor(data[:trainCount, featureCount:]).float()
+
+	x_test = torch.tensor(data[trainCount:, :featureCount]).float()
+	y_test = torch.tensor(data[trainCount:, featureCount:]).float()
+
+	model = torch.nn.Sequential(
+		blitz.modules.BayesianLinear(9, hiddenNodes),
+		torch.nn.ReLU(),
+		blitz.modules.BayesianLinear(hiddenNodes, hiddenNodes),
+		torch.nn.ReLU(),
+		blitz.modules.BayesianLinear(hiddenNodes, 3)
+	)
+
+	optimizer = torch.optim.Adam(model.parameters(), lr = 0.01)
+	criterion = torch.nn.MSELoss()
+
+	for epoch in range(epochCount):
+		for batch in range(trainCount // batchSize):
+			x_batch = x_train[batch * batchSize : (batch + 1) * batchSize, :]
+			y_batch = y_train[batch * batchSize : (batch + 1) * batchSize, :]
+
+			optimizer.zero_grad()
+			loss = criterion(model(x_batch), y_batch)
+
+			loss.backward()
+			optimizer.step()
+
+	p = model(x_test)
+
+	print("MSE loss for model", filePath, ":", criterion(y_test, p))
+
+	with open(filePath, "wb") as dataFile:
+		pickle.dump(model, dataFile)
 
 dataPath = "data/"
 dataFileNames = os.listdir(dataPath)
@@ -127,58 +170,41 @@ for dataFileName in dataFileNames:
 
 	data = numpy.append(data, loadedData, axis = 0)
 
-print(data.shape)
+filteredData = filterData(data)
 
-filterData(data)
+leftWallData = filteredData[0]
+rightWallData = filteredData[1]
+centerWallData = filteredData[2]
+floorData = filteredData[3]
+ceilingData = filteredData[4]
+sphereData = filteredData[5]
 
 testCount = 1000
-trainCount = data.shape[0] - testCount
-
 batchSize = 250
-batchCount = math.ceil(trainCount / batchSize)
-
-featureCount = 9
-
-x_train = torch.tensor(data[:trainCount, :featureCount]).float()
-y_train = torch.tensor(data[:trainCount, featureCount:]).float()
-
-x_test = torch.tensor(data[trainCount:, :featureCount]).float()
-y_test = torch.tensor(data[trainCount:, featureCount:]).float()
-
-print(x_train.size())
-print(y_train.size())
-
-print(x_test.size())
-print(y_test.size())
-
 hiddenNodes = 20
+epochCount = 32
 
-model = torch.nn.Sequential(
-	blitz.modules.BayesianLinear(9, hiddenNodes),
-	torch.nn.ReLU(),
-	blitz.modules.BayesianLinear(hiddenNodes, hiddenNodes),
-	torch.nn.ReLU(),
-	blitz.modules.BayesianLinear(hiddenNodes, 3)
+trainAndSaveNetwork(
+	leftWallData, testCount, batchSize, hiddenNodes, epochCount,
+	"models/leftWall.pkl"
 )
-
-optimizer = torch.optim.Adam(model.parameters(), lr = 0.01)
-criterion = torch.nn.MSELoss()
-
-for epoch in range(32):
-	for batch in range(trainCount // batchSize):
-		x_batch = x_train[batch * batchSize : (batch + 1) * batchSize, :]
-		y_batch = y_train[batch * batchSize : (batch + 1) * batchSize, :]
-
-		optimizer.zero_grad()
-		loss = criterion(model(x_batch), y_batch)
-
-		loss.backward()
-		optimizer.step()
-
-p = model(x_test)
-
-print(p.size())
-print(criterion(y_test, p))
-
-with open("models/test.pkl", "wb") as dataFile:
-	pickle.dump(model, dataFile)
+trainAndSaveNetwork(
+	rightWallData, testCount, batchSize, hiddenNodes, epochCount,
+	"models/rightWall.pkl"
+)
+trainAndSaveNetwork(
+	centerWallData, testCount, batchSize, hiddenNodes, epochCount,
+	"models/centerWall.pkl"
+)
+trainAndSaveNetwork(
+	floorData, testCount, batchSize, hiddenNodes, epochCount,
+	"models/floor.pkl"
+)
+trainAndSaveNetwork(
+	ceilingData, testCount, batchSize, hiddenNodes, epochCount,
+	"models/ceiling.pkl"
+)
+trainAndSaveNetwork(
+	sphereData, testCount, batchSize, hiddenNodes, epochCount,
+	"models/sphere.pkl"
+)
