@@ -22,7 +22,9 @@ class NeuralNetworkMaterial(BlinnPhongMaterial):
 		]])
 
 		networkInput = torch.tensor(networkInput).float()
-		networkOutput = self.network(networkInput)[0, :]
+
+		with torch.no_grad():
+			networkOutput = self.network(networkInput)[0, :]
 
 		indirectLighting = [
 			networkOutput[0] * light.color[0],

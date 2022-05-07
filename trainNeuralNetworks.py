@@ -132,6 +132,8 @@ def trainAndSaveNetwork(
 		torch.nn.ReLU(),
 		blitz.modules.BayesianLinear(hiddenNodes, hiddenNodes),
 		torch.nn.ReLU(),
+		blitz.modules.BayesianLinear(hiddenNodes, hiddenNodes),
+		torch.nn.ReLU(),
 		blitz.modules.BayesianLinear(hiddenNodes, 3)
 	)
 
@@ -181,7 +183,7 @@ sphereData = filteredData[5]
 
 testCount = 1000
 batchSize = 250
-hiddenNodes = 20
+hiddenNodes = 15
 epochCount = 32
 
 print("networks:")
