@@ -100,13 +100,13 @@ def filterData(data):
 	sphereData = data[sphereIndices, :]
 
 	print("classifications:")
-	print("left wall:", leftWallData.shape) # 26114 / 200K
-	print("right wall:", rightWallData.shape) # 26622 / 200K
-	print("center wall:", centerWallData.shape) # 52850 / 200K
-	print("floor:", floorData.shape) # 26342 / 200K
-	print("ceiling:", ceilingData.shape) # 26300 / 200K
-	print("sphere:", sphereData.shape) # 41772 / 200K
-	print("unclassified:", len(unclassifiedIndices)) # 0 / 200K
+	print("left wall:", len(leftWallIndices)) # 131729 / 1M
+	print("right wall:", len(rightWallIndices)) # 132127 / 1M
+	print("center wall:", len(centerWallIndices)) # 264325 / 1M
+	print("floor:", len(floorIndices)) # 132433 / 1M
+	print("ceiling:", len(ceilingIndices)) # 132280 / 1M
+	print("sphere:", len(sphereIndices)) # 207106 / 1M
+	print("unclassified:", len(unclassifiedIndices)) # 0 / 1M
 
 	return [
 		leftWallData, rightWallData, centerWallData,
@@ -151,7 +151,7 @@ def trainAndSaveNetwork(
 
 	p = model(x_test)
 
-	print("MSE loss for model", filePath, ":", criterion(y_test, p))
+	print("MSE loss for", filePath, ":", criterion(y_test, p).item())
 
 	with open(filePath, "wb") as dataFile:
 		pickle.dump(model, dataFile)
@@ -183,6 +183,8 @@ testCount = 1000
 batchSize = 250
 hiddenNodes = 20
 epochCount = 32
+
+print("networks:")
 
 trainAndSaveNetwork(
 	leftWallData, testCount, batchSize, hiddenNodes, epochCount,
